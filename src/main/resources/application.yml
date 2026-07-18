@@ -20,7 +20,7 @@ spring:
       genai:
         api-key: ${GEMINI_API_KEY}
         chat:
-          model: ${GEMINI_MODEL:gemini-2.5-flash-lite}
+          model: ${GEMINI_MODEL:gemini-2.5-flash}
           temperature: 0.55
           max-output-tokens: 4096
           response-mime-type: application/json
