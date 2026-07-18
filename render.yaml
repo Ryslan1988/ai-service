@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: teach-sim-ai
+    runtime: docker
+    plan: free
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+      - key: AI_CORS_ALLOWED_ORIGINS
+        value: https://teach-sim.onrender.com,http://localhost:5173

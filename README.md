@@ -45,6 +45,11 @@ mvn spring-boot:run
 
 Сервис запускается на `http://localhost:8087`.
 
+Для production в репозитории есть `render.yaml`. При первом создании Blueprint
+Render запросит секрет `GEMINI_API_KEY`; ключ нельзя добавлять в Git. Сервис
+будет доступен по `https://teach-sim-ai.onrender.com`, а `PORT` назначит Render.
+Для прогрева frontend вызывает `GET /api/v1/ai/health` до начала интервью.
+
 ## API
 
 ### Генерация вопроса
