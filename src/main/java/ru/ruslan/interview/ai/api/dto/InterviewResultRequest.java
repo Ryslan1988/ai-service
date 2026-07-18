@@ -1,0 +1,15 @@
+package ru.ruslan.interview.ai.api.dto;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Positive;
+import java.util.List;
+
+public record InterviewResultRequest(
+        @Positive long interviewId,
+        @NotBlank String position,
+        @NotBlank String declaredLevel,
+        @NotEmpty List<@Valid InterviewAnswerDto> answers
+) {
+}

@@ -1,0 +1,6 @@
+target/
+.idea/
+*.iml
+.env
+.DS_Store
+AI_SERVICE_SESSION.md
