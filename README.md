@@ -56,7 +56,9 @@ curl -X POST http://localhost:8087/api/v1/ai/questions/generate \
     "technology": "Java",
     "level": "SENIOR",
     "difficulty": 8,
+    "variationSeed": "interview-42-round-3-7f19",
     "previousQuestions": ["Что такое HashMap?"],
+    "previousAnswers": ["HashMap всегда потокобезопасен"],
     "candidates": [
       {"id":"maria","name":"Мария","level":"SENIOR","personality":"системная и спокойная"},
       {"id":"alex","name":"Алексей","level":"MIDDLE+","personality":"практичный и краткий"},
@@ -68,7 +70,10 @@ curl -X POST http://localhost:8087/api/v1/ai/questions/generate \
 
 Один вызов возвращает вопрос, эталонный ответ и ровно четыре
 персонализированные реплики — по одной для каждого переданного `candidateId`.
-Ровно одна реплика имеет `correct=true`.
+Ровно одна реплика имеет `correct=true`. `variationSeed` меняется для каждого
+раунда, а история вопросов и ответов запрещает модели повторять прежний контент.
+Если модель всё же вернула повтор или слишком похожие реплики, сервис выполняет
+ещё одну генерацию и повторно проверяет результат.
 
 ```json
 {

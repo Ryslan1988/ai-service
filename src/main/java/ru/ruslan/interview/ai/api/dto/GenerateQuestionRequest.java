@@ -12,7 +12,9 @@ public record GenerateQuestionRequest(
         @NotBlank String technology,
         @NotBlank String level,
         @Min(1) @Max(10) int difficulty,
-        @NotNull List<@NotBlank String> previousQuestions,
+        @NotBlank String variationSeed,
+        @NotNull @Size(max = 60) List<@NotBlank String> previousQuestions,
+        @NotNull @Size(max = 120) List<@NotBlank String> previousAnswers,
         @NotNull @Size(min = 4, max = 4)
         List<@NotNull @Valid CandidateProfileRequest> candidates
 ) {

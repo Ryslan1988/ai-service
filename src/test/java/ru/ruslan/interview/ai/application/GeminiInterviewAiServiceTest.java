@@ -61,12 +61,85 @@ class GeminiInterviewAiServiceTest {
         );
     }
 
+    @Test
+    void rejectsQuestionAlreadyPresentInHistory() {
+        assertThrows(
+                AiResponseException.class,
+                () -> service.requireQuestionResponse(
+                        response(List.of(
+                                answer("one", true),
+                                answer("two", false),
+                                answer("three", false),
+                                answer("four", false)
+                        )),
+                        request(List.of("Как работает volatile?"), List.of())
+                )
+        );
+    }
+
+    @Test
+    void rejectsRepeatedCandidateAnswers() {
+        var duplicate = new GeneratedCandidateAnswerResponse(
+                "two",
+                "Одинаковая формулировка ответа кандидата",
+                false,
+                "unsure"
+        );
+        var anotherDuplicate = new GeneratedCandidateAnswerResponse(
+                "three",
+                "Одинаковая формулировка ответа кандидата",
+                false,
+                "thinking"
+        );
+
+        assertThrows(
+                AiResponseException.class,
+                () -> service.requireQuestionResponse(
+                        response(List.of(
+                                answer("one", true),
+                                duplicate,
+                                anotherDuplicate,
+                                answer("four", false)
+                        )),
+                        request()
+                )
+        );
+    }
+
+    @Test
+    void rejectsAnswerAlreadyPresentInHistory() {
+        assertThrows(
+                AiResponseException.class,
+                () -> service.requireQuestionResponse(
+                        response(List.of(
+                                answer("one", true),
+                                answer("two", false),
+                                answer("three", false),
+                                answer("four", false)
+                        )),
+                        request(
+                                List.of(),
+                                List.of("volatile устанавливает мониторную блокировку")
+                        )
+                )
+        );
+    }
+
     private GenerateQuestionRequest request() {
+        return request(List.of(), List.of());
+    }
+
+    private GenerateQuestionRequest request(
+            List<String> previousQuestions,
+            List<String> previousAnswers
+    ) {
         return new GenerateQuestionRequest(
                 "Java",
                 "MIDDLE+",
                 6,
-                List.of(),
+                "test-seed",
+                previousQuestions,
+                previousAnswers,
                 List.of(
                         candidate("one"),
                         candidate("two"),
@@ -96,9 +169,15 @@ class GeminiInterviewAiServiceTest {
             String candidateId,
             boolean correct
     ) {
+        var answerText = switch (candidateId) {
+            case "two" -> "volatile устанавливает мониторную блокировку";
+            case "three" -> "изменения видны только в локальном кеше потока";
+            case "four" -> "составной инкремент становится полностью атомарным";
+            default -> "Гарантируется видимость записи между потоками";
+        };
         return new GeneratedCandidateAnswerResponse(
                 candidateId,
-                correct ? "Технически правильный ответ" : "Правдоподобная ошибка",
+                answerText,
                 correct,
                 "confident"
         );

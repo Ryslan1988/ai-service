@@ -14,7 +14,7 @@ spring:
         api-key: ${GEMINI_API_KEY}
         chat:
           model: ${GEMINI_MODEL:gemini-3.5-flash}
-          temperature: 0.2
+          temperature: 0.55
           max-output-tokens: 4096
           thinking-level: MINIMAL
           response-mime-type: application/json

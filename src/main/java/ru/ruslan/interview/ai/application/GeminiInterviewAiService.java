@@ -2,6 +2,12 @@ package ru.ruslan.interview.ai.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.text.Normalizer;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import ru.ruslan.interview.ai.api.dto.AnswerEvaluationResponse;
@@ -31,9 +37,30 @@ public class GeminiInterviewAiService implements AiInterviewService {
     public GeneratedQuestionResponse generateQuestion(
             GenerateQuestionRequest request
     ) {
+        AiResponseException lastContractError = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            var result = requestQuestion(request, attempt);
+            try {
+                return requireQuestionResponse(result, request);
+            } catch (AiResponseException exception) {
+                lastContractError = exception;
+            }
+        }
+        throw lastContractError == null
+                ? new AiResponseException("AI-провайдер не сгенерировал вопрос")
+                : lastContractError;
+    }
+
+    private GeneratedQuestionResponse requestQuestion(
+            GenerateQuestionRequest request,
+            int attempt
+    ) {
         var previousQuestions = request.previousQuestions().isEmpty()
                 ? "Отсутствуют"
                 : String.join("\n- ", request.previousQuestions());
+        var previousAnswers = request.previousAnswers().isEmpty()
+                ? "Отсутствуют"
+                : String.join("\n- ", request.previousAnswers());
 
         var candidatesJson = writeJson(
                 request.candidates(),
@@ -48,20 +75,38 @@ public class GeminiInterviewAiService implements AiInterviewService {
                                 Технология: {technology}
                                 Уровень кандидата: {level}
                                 Сложность от 1 до 10: {difficulty}
+                                Ключ вариации: {variationSeed}
+                                Попытка генерации: {attempt}
 
                                 Ранее заданные вопросы:
                                 {previousQuestions}
 
+                                Ранее сгенерированные ответы:
+                                {previousAnswers}
+
                                 Кандидаты в JSON:
                                 {candidates}
 
-                                Не повторяй предыдущие вопросы. Верни ровно четыре
+                                Уровень обязателен: JUNIOR — проверка основ и простого
+                                применения; MIDDLE — практический сценарий, причины и
+                                компромиссы; SENIOR — архитектура, ограничения, риски
+                                и поведение системы под нагрузкой.
+
+                                Создавай новый узкий практический сценарий, а не
+                                шаблонный вопрос из учебника. Ключ вариации используй
+                                как источник нового ракурса. Не повторяй и не
+                                перефразируй вопросы из истории.
+
+                                Верни ровно четыре
                                 элемента в answers — по одному для каждого кандидата.
                                 candidateId копируй из входного JSON без изменений.
 
                                 Ровно один ответ должен иметь correct=true и быть
                                 технически правильным. Остальные три ответа должны
                                 содержать разные правдоподобные, но неочевидные ошибки.
+                                Все четыре ответа должны отличаться подходом, лексикой
+                                и аргументацией, не копировать фразы из истории. Меняй
+                                кандидата с правильным ответом между генерациями.
                                 Учитывай уровень и характер кандидата, делай реплики
                                 естественными и не сообщай в тексте, правильный ли ответ.
 
@@ -72,12 +117,15 @@ public class GeminiInterviewAiService implements AiInterviewService {
                         .param("technology", request.technology())
                         .param("level", request.level())
                         .param("difficulty", request.difficulty())
+                        .param("variationSeed", request.variationSeed())
+                        .param("attempt", attempt)
                         .param("previousQuestions", previousQuestions)
+                        .param("previousAnswers", previousAnswers)
                         .param("candidates", candidatesJson))
                 .call()
                 .entity(GeneratedQuestionResponse.class);
 
-        return requireQuestionResponse(result, request);
+        return result;
     }
 
     @Override
@@ -210,6 +258,7 @@ public class GeminiInterviewAiService implements AiInterviewService {
                 || isBlank(response.explanation())
                 || response.difficulty() < 1
                 || response.difficulty() > 10
+                || Math.abs(response.difficulty() - request.difficulty()) > 1
                 || response.answers() == null
                 || response.answers().size() != 4) {
             throw new AiResponseException("AI-провайдер вернул некорректный вопрос");
@@ -232,7 +281,22 @@ public class GeminiInterviewAiService implements AiInterviewService {
                         || isBlank(answer.answer())
                         || isBlank(answer.reaction())
         );
+        var generatedAnswers = response.answers().stream()
+                .map(answer -> answer.answer())
+                .toList();
+        var repeatedQuestion = request.previousQuestions().stream()
+                .anyMatch(previous -> isTooSimilar(response.question(), previous));
+        var repeatedAnswer = generatedAnswers.stream().anyMatch(answer ->
+                request.previousAnswers().stream()
+                        .anyMatch(previous -> isTooSimilar(answer, previous))
+        );
 
+        if (repeatedQuestion) {
+            throw new AiResponseException("AI-провайдер повторил предыдущий вопрос");
+        }
+        if (repeatedAnswer || hasSimilarItems(generatedAnswers)) {
+            throw new AiResponseException("AI-провайдер повторил предыдущие ответы");
+        }
         if (!requestedIds.equals(responseIds)
                 || responseIds.size() != 4
                 || correctAnswers != 1
@@ -240,6 +304,52 @@ public class GeminiInterviewAiService implements AiInterviewService {
             throw new AiResponseException("AI-провайдер вернул некорректные ответы кандидатов");
         }
         return response;
+    }
+
+    private boolean hasSimilarItems(List<String> values) {
+        for (int left = 0; left < values.size(); left++) {
+            for (int right = left + 1; right < values.size(); right++) {
+                if (isTooSimilar(values.get(left), values.get(right))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isTooSimilar(String left, String right) {
+        var normalizedLeft = normalize(left);
+        var normalizedRight = normalize(right);
+        if (normalizedLeft.isBlank() || normalizedRight.isBlank()) {
+            return false;
+        }
+        if (normalizedLeft.equals(normalizedRight)) {
+            return true;
+        }
+
+        var leftTokens = tokens(normalizedLeft);
+        var rightTokens = tokens(normalizedRight);
+        if (Math.min(leftTokens.size(), rightTokens.size()) < 3) {
+            return false;
+        }
+        var overlap = leftTokens.stream().filter(rightTokens::contains).count();
+        return overlap / (double) Math.min(leftTokens.size(), rightTokens.size()) >= 0.8;
+    }
+
+    private Set<String> tokens(String value) {
+        return Arrays.stream(value.split("\\s+"))
+                .filter(token -> token.length() > 3)
+                .collect(Collectors.toSet());
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFKC)
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^\\p{L}\\p{N}]+", " ")
+                .trim();
     }
 
     private boolean isBlank(String value) {
