@@ -49,6 +49,8 @@ mvn spring-boot:run
 Render запросит секрет `GEMINI_API_KEY`; ключ нельзя добавлять в Git. Сервис
 будет доступен по `https://teach-sim-ai.onrender.com`, а `PORT` назначит Render.
 Для прогрева frontend вызывает `GET /api/v1/ai/health` до начала интервью.
+В Blueprint явно задан `PORT=10000`; приложение слушает `0.0.0.0` и лениво
+создаёт AI-бины, чтобы health endpoint открылся до инициализации Gemini.
 
 ## API
 
