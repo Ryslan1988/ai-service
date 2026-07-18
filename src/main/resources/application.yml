@@ -20,9 +20,10 @@ spring:
       genai:
         api-key: ${GEMINI_API_KEY}
         chat:
-          model: ${GEMINI_MODEL:gemini-2.5-flash}
+          model: ${GEMINI_MODEL:gemini-3.1-flash-lite}
           temperature: 0.55
           max-output-tokens: 4096
+          thinking-level: MINIMAL
           response-mime-type: application/json
     retry:
       max-attempts: 3
